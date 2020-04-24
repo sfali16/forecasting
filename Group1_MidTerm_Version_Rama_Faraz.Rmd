@@ -1,0 +1,145 @@
+---
+title: Group Assignment MidTerm - California Small Business - Credit Card Accounts
+  Data
+author: "C. Loya, S.F. Ali, R. Lakshminarayana & A. Carriedo"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Clear the work space 
+```{r cleanup}
+rm(list = ls())
+```
+# Load Libraries and Set Options  
+
+Here are the libraries used in this program. 
+
+```{r packages, message=FALSE, warning=FALSE, include=FALSE}
+library(readxl) # read from excel
+library(writexl) # write to excel
+library(ggplot2) # make ncie plots 
+library(xts) # helpful for making dates for time series as.yearmon(). 
+library(forecast) # This has the ARMA function 
+library(psych) # nice summary statistics with describe() function
+library(dplyr) # program to filter and pipe the data in the GGPLOT for the forecasts
+library(tinytex)
+uninstall_tinytex()
+library(urca) #  for the unit root test function ur.df
+```
+
+```{r Read the data, echo=TRUE }
+data_from_excel <- read_excel("WF_Raw_data.xlsx") 
+```
+
+## R Program Summary
+\newline
+
+1. A general description of the data.
+
+2. A plot of the series.
+
+3. Summary statistics.
+
+4. Any problems with the series. Are there any outliers or unusual events?
+
+5. Explanations of any simplifying assumptions used in modeling the series. (How are outliers treated?
+
+6. One set of forecasts and confidence intervals for the series from a model presented in the first three weeks of the course.
+
+A. An appendix to include technical details of the analysis that supports your business document.
+
+
+### 1. A general description of the data.  
+
+The data provided here is the monthly number of new Credit Card accounts openend by small businesses in California with a large Banking institue, between year 2002 and 2020. 
+
+```{r creat_the_structure_of_the_data.frame, message=FALSE, warning=FALSE, tidy=TRUE}
+str(data_from_excel)
+
+
+
+CCSales_ts <- ts(data_from_excel, start=c(2002,1), frequency = 12, names =c("CA_New_Credit_Card_Accounts") )
+str(CCSales_ts)
+```
+
+### 2. A plot of the series.
+
+```{r creat timeseries and plot, echo=TRUE, warning=FALSE}
+
+autoplot(CCSales_ts, colour = 'red') +
+  labs(x = "Observation Date", y = "CA_New_Credit_Card_Accounts")
+
+#
+#  Plot with ggplot2
+#
+
+df_data <- data.frame(date=as.Date(as.yearmon(time(CCSales_ts))), Y=as.matrix(CCSales_ts))
+
+
+ggplotdf <- ggplot(data=df_data[1:2], aes(x=date,y=CA_New_Credit_Card_Accounts))+geom_line()
+
+
+ggplotdf + scale_x_date(date_label = "%Y", date_breaks = "1 year") + theme(axis.text.x = element_text( angle = 45))
+```
+
+### 3. Summary statistics.
+```{r summary of data}
+summary(CCSales_ts)
+```
+
+### 4. Any problems with the series. Are there any outliers or unusual events?
+```{r}
+hist(data_from_excel$`New Visa Card Opens`)
+boxplot(data_from_excel,horizontal = T)
+```
+
+
+Based on 1.5*IQR rule, there are no Outliers in this dataset.
+
+### 5. Explanations of any simplifying assumptions used in modeling the series.
+
+
+In the ggplot above, presence of seasonlity in the dataset is clearly evident. But, a global trend is not observed. hence, Holt Exponential Smoothing ( with lower value of beta) will be utilized for forecasting.
+
+### 6. Forecasts and confidence intervals for the series from Holt Exponential Smoothing model
+
+```{r Holt Exponential Smoothing for Forecast}
+Holt_Winters <- ets(CCSales_ts, model = "MAM", alpha = .4, beta = .15, gamma=.3)  
+Holt_Winters
+plot(Holt_Winters)
+
+HOLT <- ets(CCSales_ts, model = "AAN", alpha = .2, beta = .05)  
+HOLT
+plot(HOLT)
+HOLT.pred <- forecast(HOLT, h = 18, level = c(95))
+plot(HOLT.pred)
+
+HOLT_auto <- ets(CCSales_ts, model = "AAN")  
+HOLT_auto
+plot(HOLT_auto)
+HOLT_auto.pred <- forecast(HOLT_auto, h = 3, level = c(95))
+plot(HOLT_auto.pred)
+
+col_names <- as.yearmon(time(HOLT.pred$mean)) 
+df <-  data.frame( as.Date(col_names), HOLT.pred$mean, HOLT.pred$lower, HOLT.pred$upper)
+colnames(df) <- c("Date", "Forecast", "95% Lower", "95% Upper" )
+# write_xlsx(df, "Annual_New_CredirCard_prediction.xlsx")
+
+df
+
+ggplot(data = df, aes(x = Date, y = as.double(Forecast) )) +
+  geom_point( color="blue" ) + 
+  geom_line(aes(x = Date, y = `95% Lower`), color="red" ) +  
+  geom_line(aes(x = Date, y = `95% Upper`), color="red" ) +
+  geom_point(data=df_data, mapping=aes(x=date, y=CA_New_Credit_Card_Accounts))+
+  labs(x = "Date", y = "CA_New_Credit_Card_Accounts")
+
+
+```
+
