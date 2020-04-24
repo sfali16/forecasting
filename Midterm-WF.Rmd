@@ -1,0 +1,251 @@
+---
+title: "Midterm-WF.Rmd"
+author: "Faraz Ali, Fallaw Sowell"
+date: "4/3/2020"
+output: 
+  pdf_document: null
+  html_document:
+    df_print: paged
+  toc: yes
+  number_sections: true
+  toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\tableofcontents 
+\newpage
+
+## Clear the work space 
+
+```{r cleanup}
+rm(list = ls())
+```
+
+## Load Libraries and Set Options
+
+Here are the libraries used in this program. 
+
+
+```{r packages}
+library(readxl) # read from excel
+library(writexl) # write to excel
+library(ggplot2) # make ncie plots 
+library(xts) # helpful for making dates for time series as.yearmon(). 
+library(forecast) # This has the ARMA function 
+library(psych) # nice summary statistics with describe() function
+
+library(dplyr) # program to filter and pipe the data in the GGPLOT for the forecasts
+
+library(urca) #  for the unit root test function ur.df
+```
+
+## Program Description 
+
+This is an R Markdown document.  The program estimates ARMA models for the Small Business credit cards issued by Wesll Fargo.
+The basic parts of the program are 
+1.  read from excel file,  
+2.  plot the series, 
+3.  is the series weakly stationary
+  3a.  does the series need to be first differenced (remove trend),
+  3b.  does the series need to be logged (make homoskedastic), 
+4.  estimate the best ARMA model, 
+5.  create the forecasts from the best ARMA model, 
+6.  Undo the transformations to report in the business setting. 
+
+### Load the data into R
+
+Read the data from the excel file and save as a data.frame.   This excel file needs to be in the R working directory.   Alternatively, you would need to include the path the excel file.  
+
+This data is representative monthly (aggregate) data of the number of small business credit card accounts opened with Wells Fargo in California.
+
+```{r Read the data, echo=TRUE }
+
+data_from_excel <- read_excel("WF_Raw_data.xlsx") 
+
+
+```
+
+
+###  Get familiar with your data, variables, size, etc. 
+
+It is good practice to review the data by looking at its structure.  
+
+```{r Look_at_the_structure_of_the_data.frame}
+
+str( data_from_excel )
+
+```
+
+
+### Make new credit card a monthly time series 
+
+Create the time series data structure for credit card opens, displays its structure, reports basic summary values, and plots the time series.  Summary stats on the Visa Cards Issued can be found below:
+
+``` {r make_timeseries,_summarize,_and_plot}
+
+card_ts <- ts(data_from_excel, start=c(2002,1), frequency = 12, names =c("New Visa Cards Issued") )
+
+
+str(card_ts)
+
+describe(card_ts)  # function from the psych library 
+
+summary(card_ts)
+
+autoplot(card_ts, color = 'red') +
+  labs(x = "Observation Date", y = "Cards issued by WF in CA")
+```
+
+
+###  Plot with ggplot2
+
+1. A general description of the data.
+
+2. A plot of the series.
+3. Summary statistics.
+
+
+```{r  ggplot_data}
+df_data <- data.frame(date=as.Date(as.yearmon(time(card_ts))), Y=as.matrix(card_ts))
+ggplot(data=df_data, mapping=aes(x=date, y=New.Visa.Cards.Issued ))+geom_point()+geom_line(color='red')
+
+```
+
+## 4. Any problems with the series.? (Are there any outliers or unusual events? Typically this is not an issue for data obtained from the Government.? This is more an issue for students working with data from their current employers.)
+
+  There isn't any known problem with the series / data. This series doesn't look weakly stationary - both the mean and the variance are different as you move along the different axes. There appears to be a general positive trend  until there are a couple large declines caused by significant events <br> 
+  1. The 2008 Recession that resulted in a period of consistent decline in new cards that lasted until about 2010; and
+  2. In early 2016, there was another sharp decline - perhaps this is when the scandal of fake accounts broke out. 
+  This means the series is not weakly stationary.   
+  Trend is removed by taking the first difference.  
+  
+``` {r plot_the_first_difference}
+
+autoplot( diff(card_ts), colour = 'red') +
+  labs(x = "Observation Date", y = "First Difference of New Cards Issued in CA")
+
+```
+
+  The volatility (the zig-zag) of the series seems to increase over time.  This is also a violation of the series being weakly stationary.  We can typically address this by taking the log of the series.  
+  
+``` {r plot_the_first_difference_of_the_log }
+
+autoplot( diff( log(card_ts)), colour = 'blue') +
+  labs(x = "Observation Date", y = "First Difference of the Log of New Cards in CA")
+
+```
+  
+We will have a weakly stationary time series by taking the first difference of the log of the New Cards in CA.  The first difference of the log is very similar to the rate of change in cards being opened. This is what you looked at in your Macroeconomics course.   Similarly, what gets reported is the annual growth rate, not the level of GDP.  Why is this what we study?  Because these transformation are need to make the series weakly stationary and hence we can perform appropriate statistical analysis.   
+
+``` {r transform_to_weak_stationarity}
+
+Lcard_ts = log(card_ts)
+
+```
+  
+## Do some simple exponential smoothing
+Since we dont think there is consistent trend or seasonality, let's do exponential smoothing
+
+### Exponential Smoothing with Alpha=0.2
+```{r exponential_smoothing}
+
+#  Model options "error, trend, seasonal"  
+#
+#  "N" - none
+#  "A" - additive
+#  "M" - multiplicative
+#  "Z" - automatically selected
+# ANN stands for Additive error, No trend, No seasonal 
+card_expo_alpha20 <- ets(card_ts, model = "ANN", alpha = .2) 
+
+#
+# Look at the output
+#
+card_expo_alpha20
+
+#
+# Look at the data structure of the output
+#
+str(card_expo_alpha20)
+
+#
+# plot the output
+#
+plot(card_expo_alpha20)
+
+#
+# Create predictions
+# h-> number of periods in the future
+# level = c(95) - confidence interval of 95 %, but in real world this doesn't hold true
+#
+card_expo_alpha20.pred <- forecast(card_expo_alpha20, h = 18, level = c(95))
+
+#
+#  Look at the predictions
+#
+card_expo_alpha20.pred
+
+#
+# look at the data structure of the predictions
+#
+str(card_expo_alpha20.pred)
+
+#
+# Plot the predictions
+#
+plot(card_expo_alpha20.pred)
+
+```
+
+### Exponential Smoothing with Alpha=0.05
+```{r exponential_smoothing_0.05}
+
+#  Model options "error, trend, seasonal"  
+#
+#  "N" - none
+#  "A" - additive
+#  "M" - multiplicative
+#  "Z" - automatically selected
+# ANN stands for Additive error, No trend, No seasonal 
+card_expo_alpha05 <- ets(card_ts, model = "ANN", alpha = .05) 
+
+#
+# Look at the output
+#
+card_expo_alpha05
+
+#
+# Look at the data structure of the output
+#
+str(card_expo_alpha05)
+
+#
+# plot the output
+#
+plot(card_expo_alpha05)
+
+#
+# Create predictions
+# h-> number of periods in the future
+# level = c(95) - confidence interval of 95 %, but in real world this doesn't hold true
+#
+card_expo_alpha05.pred <- forecast(card_expo_alpha05, h = 18, level = c(95))
+
+#
+#  Look at the predictions
+#
+card_expo_alpha05.pred
+
+#
+# look at the data structure of the predictions
+#
+str(card_expo_alpha05.pred)
+
+#
+# Plot the predictions
+#
+plot(card_expo_alpha05.pred)
+```
