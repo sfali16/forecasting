@@ -20,7 +20,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r cleanup, echo=FALSE, include=FALSE}
 rm(list = ls())
-environment()
 library(readxl) # read from excel
 library(writexl) # write to excel
 library(ggplot2) # make ncie plots 
@@ -28,6 +27,9 @@ library(xts) # helpful for making dates for time series as.yearmon().
 library(forecast) # This has the ARMA function 
 library(psych) # nice summary statistics with describe() function
 library(tinytex)
+## TODO remove tinytex install steps
+# need to do this to get knit to pdf  working
+# tinytex::install_tinytex()
 library(dplyr) # program to filter and pipe the data in the GGPLOT for the forecasts
 library(vars)
 
@@ -189,7 +191,7 @@ ARIMA00
 ```
 ### Look at residuals
 Check ACF and PCF of the best ARIMA model
-``` {r ACF_and_PACF_for_ARIMA00_noint}
+``` {r ACF_and_PACF_for_ARIMA00_noint_rut}
 
 acf(resid(ARIMA00_noint), lag.max = 20, main = "ACF for ARIMA00_noint Lrut_ts")
 
@@ -228,10 +230,16 @@ ARIMA_P6_Q0
 ## Make WF Series weakly stationary  
 Trend is removed by taking the first difference. And remove variance by taking the log 
 ``` {r plot_the_first_difference_wf}
-
-
 autoplot( diff(wf_ts), colour = 'blue') +
   labs(x = "Observation Date", y = "First Difference")
+D4wf_ts <- diff(wf_ts, lag = 4)
+autoplot( D4wf_ts, color='red') + 
+  labs(x = "Observation Date", y = "Fourth Difference")
+
+D12wf_ts <- diff(wf_ts, lag=12)
+autoplot( D12wf_ts, color='red') + 
+  labs(x = "Observation Date", y = "Twelvth Difference")
+
 
 autoplot( diff(log(wf_ts)), color='red') + 
   labs(x = "Observation Date", y = "First Difference of Log")
@@ -255,80 +263,195 @@ From the ACF of the first difference of the log it looks lik we have seasonality
 
 
 ## Find best ARMA model for the transformed RUT series
+We will pick the 12th difference seasonally, and the first difference
+
 ### Check basic ARMA models first
+
 ```{r default_arima_models_wf}
-
-Lwf_ts <- log(wf_ts)
-
 minBIC <<- 10000
-ARIMA00_noint<- Arima(Lwf_ts, order = c(0,1,0), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" )  #  BIC=-191.45
+ARIMA00_noint<- Arima(wf_ts, order = c(0,1,0), seasonal=list(order=c(0,1,0), period=12), method="ML" )  #  BIC=3080.65
 ARIMA00_noint 
 isMinBIC(ARIMA00_noint)
 minBIC
-ARIMA00<- Arima(Lwf_ts,order = c(0,1,0), seasonal=list(order=c(0,1,0), period=12),  include.constant = TRUE, method="ML" ) # BIC=-191.45
-isMinBIC(ARIMA00)
-ARIMA00
 ```
 ###  Look at residuals
 Check ACF and PCF of the best ARIMA model
 ``` {r ACF_and_PACF_for_ARIMA00_noint}
 
-acf(resid(ARIMA00_noint), lag.max = 20, main = "ACF for ARIMA00_noint Lwf_ts")
+acf(resid(ARIMA00_noint), lag.max = 20, main = "ACF for ARIMA00_noint wf_ts")
 
-pacf( resid(ARIMA00_noint), lag.max = 20, main = "PACF for ARIMA00_noint Lwf_ts")
+pacf( resid(ARIMA00_noint), lag.max = 20, main = "PACF for ARIMA00_noint wf_ts")
 
 ```
-### Structure at lag 4
-This shows strucutre at lag 4, so try to fit models to that lag next next
-```{r arma_lag_4}
-minBIC
-ARIMA_P4_Q0<- Arima(Lwf_ts, order = c(4,1,0), fixed=c(rep.int(0,3), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) #  best bic so far, BIC=-196.86 and ar4 is significant
-ARIMA_P4_Q0 
-isMinBIC(ARIMA_P4_Q0)
+Looking at ACF and PACF, we have structure at 3, 4, 9 and 12, with 12 being the largest, so let's start with lag 12. This would be a seasonal structure. 
 
-ARIMA_P0_Q4 <- Arima(Lwf_ts,order = c(0,1,4), fixed=c(rep.int(0,3), NA), include.constant = FALSE, method="ML" ) # BIC=-144.43 not lower than best
-isMinBIC(ARIMA_P0_Q4)
-ARIMA_P0_Q4
+### Structure at lag 12
+```{r arma_lag_12}
+#seasonal AR(12)
+ARIMA_P0_Q0_S1.1.0<- Arima(wf_ts, order = c(0,1,0), seasonal=list(order=c(1,1,0), period=12), method="ML" ) #  BIC= 3062.311
+
+ARIMA_P0_Q0_S1.1.0
+isMinBIC(ARIMA_P0_Q0_S1.1.0)
+
+# seasonal MA(12)
+ARIMA_P0_Q0_S0.1.1 <- Arima(wf_ts, order = c(0,1,0), seasonal=list(order=c(0,1,1), period=12), method="ML" ) # BIC=3028.774 is the best BIC so far
+isMinBIC(ARIMA_P0_Q0_S0.1.1)
+ARIMA_P0_Q0_S0.1.1
+```
+### Find residuals on best model so far
+```{r resid_wf_AR12}
+acf(resid(ARIMA_P0_Q0_S0.1.1), lag.max = 20, main = "ACF for ARIMA_P12_Q0 wf_ts")
+
+pacf( resid(ARIMA_P0_Q0_S0.1.1), lag.max = 20, main = "PACF for ARIMA_P12_Q0 wf_ts")
+```
+
+We can see structure at lag 1, 4 and 13, so let's try 1 first
+### Structure at lag 1
+```{r arma_lag_1}
+minBIC
+# AR(1),Seasonal MA(12)
+ARIMA_P1_Q0_S0.1.1 <- Arima(wf_ts, order = c(1,1,0), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3021.39
+ARIMA_P1_Q0_S0.1.1
+isMinBIC(ARIMA_P1_Q0_S0.1.1)
+
+# MA(1), seasonal MA(12)
+ARIMA_P0_Q1_S0.1.1 <- Arima(wf_ts, order = c(0,1,1), seasonal=list(order=c(0,1,1), period=12), method="ML" ) # BIC=3020.57 - best BIC so far and MA(1) coefft is statistically significant
+isMinBIC(ARIMA_P0_Q1_S0.1.1)
+ARIMA_P0_Q1_S0.1.1
 ```
 
 ### Find residuals on best model so far
-```{r resid_wf_AR4}
-acf(resid(ARIMA_P4_Q0), lag.max = 20, main = "ACF for ARIMA_P6_Q0 Lrut_ts")
+```{r resid_wf_MA1_SMA1}
+acf(resid(ARIMA_P0_Q1_S0.1.1), lag.max = 20, main = "ACF for ARIMA_P0_Q1_S0.1.1 wf_ts")
 
-pacf( resid(ARIMA_P4_Q0), lag.max = 20, main = "PACF for ARIMA_P6_Q0 Lrus_ts")
+pacf( resid(ARIMA_P0_Q1_S0.1.1), lag.max = 20, main = "PACF for ARIMA_P0_Q1_S0.1.1 wf_ts")
 ```
-## Structure at 12, so let's try that next
-```{r arma_lag_12}
+After taking MA(1), we see structure at 3, 4, 9, 13 and 15. Since the greatest structure remains at lag4, so try to fit models there next 
+
+## Structure at 4, so let's try lag4
+```{r arma_lag_4}
 minBIC
-ARIMA_P4.12_Q0 <- Arima(Lwf_ts, order = c(12,1,0), fixed=c(rep.int(0,3), NA, rep.int(0,7), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) #  BIC=-223.12 best bic so far, ar4 and ar12 is stat significant
-ARIMA_P4.12_Q0 
-isMinBIC(ARIMA_P4.12_Q0)
+# AR(4) MA(1) + MA(12)
+ARIMA_P4_Q1_S0.1.1 <- Arima(wf_ts, order = c(4,1,1), fixed = c(0,0,0,NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3355.16, not better than best model
+ARIMA_P4_Q1_S0.1.1
+isMinBIC(ARIMA_P4_Q1_S0.1.1)
 
-ARIMA_P4_Q12 <- Arima(Lwf_ts,order = c(4,1,12), fixed=c(rep.int(0,3), NA, rep.int(0,11), NA), include.constant = FALSE, method="ML" ) # BIC=-201.69 not lower than best
-isMinBIC(ARIMA_P4_Q12)
-ARIMA_P4_Q12
+# MA(1.4), seasonal MA(12)
+ARIMA_P0_Q1.4_S0.1.1 <- Arima(wf_ts, order = c(0,1,4), fixed=c(NA, 0, 0, NA, 1), seasonal=list(order=c(0,1,1), period=12), method="ML" )#  BIC=3373.17 - not better
+isMinBIC(ARIMA_P0_Q1.4_S0.1.1)
+ARIMA_P0_Q1.4_S0.1.1
 ```
-## residuals for AR4.12:
-```{r resid_wf_AR4.12}
-acf(resid(ARIMA_P4.12_Q0), lag.max = 20, main = "ACF for ARIMA_P4.12_Q0 Lwf_ts")
-
-pacf( resid(ARIMA_P4.12_Q0), lag.max = 20, main = "PACF for ARIMA_P4.12_Q0 Lwf_ts")
-```
-## Structure at 8
-There's still some structure at 8, although it could be random variability, let's try it to be sure
-```{r arma_lag_8}
+Even though the individual terms for ar4 in the AR(4) MA(1) expression and the terms for ma4 in the MA(1.4) expressions are statistically signficant, the BIC is not smaller, so we dont have a better fit model. The next biggest structure was at lag 3. 
+## Structure for lag3:
+```{r arma_lag_3}
 minBIC
-ARIMA_P4.8.12_Q0 <- Arima(Lwf_ts, order = c(12,1,0), fixed=c(rep.int(0,3), NA, rep.int(0,3), NA, 0, 0, 0, NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) # BIC=-218.19 which is not lower than best so far and ar8 is also not stat sig
+# AR(3) MA(1) + MA(12)
+ARIMA_P3_Q1_S0.1.1 <- Arima(wf_ts, order = c(3,1,1), fixed = c(0,0,NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3315.41, not better than best model
+ARIMA_P3_Q1_S0.1.1
+isMinBIC(ARIMA_P3_Q1_S0.1.1)
 
-ARIMA_P4.8.12_Q0 
-isMinBIC(ARIMA_P4.8.12_Q0)
-
-ARIMA_P4.12_Q8 <- Arima(Lwf_ts,order = c(12,1,8), fixed=c(rep.int(0,3), NA, rep.int(0,7), NA, rep(0,7), NA), include.constant = FALSE, method="ML" ) # BIC=-240.03 which is lower than best but MA(8) is not statistically significant
-isMinBIC(ARIMA_P4.12_Q8)
-ARIMA_P4.12_Q8
+# MA(1.3), seasonal MA(12)
+ARIMA_P0_Q1.3_S0.1.1 <- Arima(wf_ts, order = c(0,1,3), fixed=c(NA, 0, NA, 1), seasonal=list(order=c(0,1,1), period=12), method="ML" )#   BIC=3430.54 - not better
+isMinBIC(ARIMA_P0_Q1.3_S0.1.1)
+ARIMA_P0_Q1.3_S0.1.1
 ```
+
+## Structure at lag 9
+Next we try structure at lag 9
+```{r arma_lag_9}
+minBIC
+# AR(9) MA(1) + MA(12)
+ARIMA_P9_Q1_S0.1.1 <- Arima(wf_ts, order = c(9,1,1), fixed = c(rep.int(0,8), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3425.34, not better than best model
+ARIMA_P9_Q1_S0.1.1
+isMinBIC(ARIMA_P9_Q1_S0.1.1)
+
+# MA(1.9), seasonal MA(12)
+ARIMA_P0_Q1.9_S0.1.1 <- Arima(wf_ts, order = c(0,1,9), fixed=c(NA, rep.int(0,7), NA, 1), seasonal=list(order=c(0,1,1), period=12), method="ML" )#   BIC=3430.51 - not better
+isMinBIC(ARIMA_P0_Q1.9_S0.1.1)
+ARIMA_P0_Q1.9_S0.1.1
+```
+Since no structure is seen at lag 9, next we try lag 13
+
+## Structure at lag 13
+Next we try to fit structure at lag 13
+```{r arma_lag_13}
+minBIC
+# AR(13) MA(1) + SMA(12)
+ARIMA_P13_Q1_S0.1.1 <- Arima(wf_ts, order = c(13,1,1), fixed = c(rep.int(0,12), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3456.46 not better than best model
+ARIMA_P13_Q1_S0.1.1
+isMinBIC(ARIMA_P13_Q1_S0.1.1)
+
+# MA(1.13), seasonal MA(12)
+ARIMA_P0_Q1.13_S0.1.1 <- Arima(wf_ts, order = c(0,1,13), fixed=c(NA, rep.int(0,11), NA, 1), seasonal=list(order=c(0,1,1), period=12), method="ML" )#   BIC=3430.71 - not better
+isMinBIC(ARIMA_P0_Q1.13_S0.1.1)
+ARIMA_P0_Q1.13_S0.1.1
+```
+Lag 13 was not a better fit either, so finally, we'll try lag 15
+## Structure at lag 15
+Next we try to fit structure at lag 13
+```{r arma_lag_15}
+minBIC
+# AR(15) MA(1) + SMA(12)
+ARIMA_P15_Q1_S0.1.1 <- Arima(wf_ts, order = c(15,1,1), fixed = c(rep.int(0,14), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3452.15 not better than best model
+ARIMA_P15_Q1_S0.1.1
+isMinBIC(ARIMA_P15_Q1_S0.1.1)
+
+# MA(1.15), seasonal MA(12)
+ARIMA_P0_Q1.15_S0.1.1 <- Arima(wf_ts, order = c(0,1,15), fixed=c(NA, rep.int(0,13), NA, 1), seasonal=list(order=c(0,1,1), period=12), method="ML" )#   BIC=3430.68 - not better
+isMinBIC(ARIMA_P0_Q1.15_S0.1.1)
+ARIMA_P0_Q1.15_S0.1.1
+```
+
+## Report best model for wf:
+Te best model is MA(1) with Seasonal MA(12), BIC=3020.57
+```{r report_wf_model}
+ARIMA_P0_Q1_S0.1.1
+
+```
+## Structure at 3
+There's still some structure at 3, although it could be random variability, let's try it to be sure
+```{r arma_lag_3}
+minBIC
+# AR(3,4,12)
+ARIMA_P3.4.12_Q0 <- Arima(wf_ts, order = c(12,1,0), fixed=c(rep.int(0,2), NA, NA, rep.int(0,7), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) # BIC=3048.74 - best BIC so far and AR3 is also statistically significant 
+
+ARIMA_P3.4.12_Q0 
+isMinBIC(ARIMA_P3.4.12_Q0)
+
+ARIMA_P4.12_Q3 <- Arima(wf_ts,order = c(12,1,3), fixed=c(rep.int(0,3), NA, rep.int(0,7), NA, rep(0,2), NA), include.constant = FALSE, method="ML" ) # BIC=3211.42 which is not lower than best so far
+isMinBIC(ARIMA_P4.12_Q3)
+ARIMA_P4.12_Q3
+```
+## Residuals of AR(3,4,12) model 
+```{r resid_wf_AR34.12}
+acf(resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "ACF for ARIMA_P3.4.12_Q0 wf_ts")
+
+pacf( resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "PACF for ARIMA_P3.4.12_Q0 wf_ts")
+```
+
+## Structure at 9
+There's still some structure at 9, let's try it to be sure
+```{r arma_lag_9}
+minBIC
+# AR(3,4,9,12)
+ARIMA_P3.4.9.12_Q0 <- Arima(wf_ts, order = c(12,1,0), fixed=c(0, 0, NA, NA, rep.int(0,4), NA, rep.int(0, 2), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) # BIC=3048.74 - best BIC so far and AR3 is also statistically significant 
+
+ARIMA_P3.4.9.12_Q0 
+isMinBIC(ARIMA_P3.4.9.12_Q0)
+
+ARIMA_P3.4.12_Q9 <- Arima(wf_ts,order = c(12,1,9), fixed=c(rep.int(0,2), NA, NA, rep.int(0,7), NA, rep(0,8), NA), include.constant = FALSE, method="ML" ) # BIC=3211.42 which is not lower than best so far
+isMinBIC(ARIMA_P3.4.12_Q9)
+ARIMA_P3.4.12_Q9
+```
+## Residuals of AR(3,4,12) model 
+```{r resid_wf_AR34.12}
+acf(resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "ACF for ARIMA_P3.4.12_Q0 wf_ts")
+
+pacf( resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "PACF for ARIMA_P3.4.12_Q0 wf_ts")
+```
+
+
 ## Best Model for WF 
-Since the structure at 8 is not statistically significiant, the best model for WF new cards issues is an AR(4,12) with a seasonal diff of 12 with BIC of -223
 
 
 ## Significant events with Wells Fargo
