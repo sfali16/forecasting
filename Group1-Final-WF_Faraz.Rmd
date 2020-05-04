@@ -52,15 +52,14 @@ isMinBIC<-function(armaModel) {
 # Program Description 
 
 This is an R Markdown document.  The program tries to improve forecasts for the Small Business credit cards issued by Wells Fargo by considering additional series that might explain the number of small business cards opened in California. 
-For each series that we consider, we will do the following:
-1.  read from excel file,  
-2.  plot the series, 
-3.  is the series weakly stationary
-  3a.  does the series need to be first differenced (remove trend),
-  3b.  does the series need to be logged (make homoskedastic), 
-4.  estimate the best ARMA model, 
-5.  create the forecasts from the best ARMA model, 
-6.  Undo the transformations to report in the business setting. 
+For each series that we consider, we will do the following:<br>
+1.  read from excel file,  <br>
+2.  plot the series, <br>
+3.  is the series weakly stationary<br>
+  3a.  does the series need to be first differenced (remove trend),<br>
+  3b.  does the series need to be logged (make homoskedastic), <br>
+4.  estimate the best ARMA model, <br>
+Finally we will put all the series together, generate a VAR model and use it to forecast 
 
 # Russell 2000 series
 
