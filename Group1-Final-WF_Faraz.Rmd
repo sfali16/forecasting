@@ -61,7 +61,9 @@ For each series that we consider, we will do the following:
 4.  estimate the best ARMA model, 
 5.  create the forecasts from the best ARMA model, 
 6.  Undo the transformations to report in the business setting. 
+
 # Russell 2000 series
+
 ## Load the Russell 2000 small-cap market index data into R
 
 Read the data from the excel file and save as a data.frame.   This excel file needs to be in the R working directory.   Alternatively, you would need to include the path the excel file.  
@@ -111,44 +113,7 @@ autoplot(rut_ts, color = 'red') +
 df_data_rut <- data.frame(date=as.Date(as.yearmon(time(rut_ts))), Y=as.matrix(rut_ts))
 df_data_rut
 ggplot(data=df_data_rut, mapping=aes(x=date, y=Russell.2000.Index ))+geom_point()+geom_line(color='red')
-
 ```
-
-
-## Make WF a monthly time series 
-
-Create the time series data structure for WF card opens, displays its structure, reports basic summary values, and plots the time series.  
-
-``` {r make_wf_timeseries,_summarize,_and_plot}
-wf_ts <- ts(data_from_excel_wf["New Visa Card Opens"], start=c(2002,1), frequency = 12, names =c("New Cards Issued") )
-
-
-str(wf_ts)
-
-describe(wf_ts)  # function from the psych library 
-
-summary(wf_ts)
-
-autoplot(wf_ts, color = 'blue') +
-  labs(x = "Observation Date", y = "New Cards Issued")
-
-```
-
-
-##  Plot WF with ggplot2
-
-1. A general description of the data.
-2. A plot of the series.
-3. Summary statistics.
-
-
-```{r  ggplot_data}
-df_data_wf <- data.frame(date=as.Date(as.yearmon(time(wf_ts))), Y=as.matrix(wf_ts))
-df_data_wf
-ggplot(data=df_data_wf, mapping=aes(x=date, y=New.Cards.Issued ))+geom_point()+geom_line(color='red')
-
-```
-
 
 ## Is the RUT series weakly stationary? 
 
@@ -223,6 +188,41 @@ Since no structure is seen, the best ARMA model is an AR(6) model without interc
 ARIMA_P6_Q0
 ```
 
+# Wells Fargo series Analysis
+
+## Make WF a monthly time series 
+
+Create the time series data structure for WF card opens, displays its structure, reports basic summary values, and plots the time series.  
+
+``` {r make_wf_timeseries,_summarize,_and_plot}
+wf_ts <- ts(data_from_excel_wf["New Visa Card Opens"], start=c(2002,1), frequency = 12, names =c("New Cards Issued") )
+
+
+str(wf_ts)
+
+describe(wf_ts)  # function from the psych library 
+
+summary(wf_ts)
+
+autoplot(wf_ts, color = 'blue') +
+  labs(x = "Observation Date", y = "New Cards Issued")
+
+```
+
+
+##  Plot WF with ggplot2
+
+1. A general description of the data.
+2. A plot of the series.
+3. Summary statistics.
+
+
+```{r  ggplot_data}
+df_data_wf <- data.frame(date=as.Date(as.yearmon(time(wf_ts))), Y=as.matrix(wf_ts))
+df_data_wf
+ggplot(data=df_data_wf, mapping=aes(x=date, y=New.Cards.Issued ))+geom_point()+geom_line(color='red')
+
+```
 ## Is the WF series weakly stationary? 
 
   This series isn't  weakly stationary - both the mean and the variance are different as you move along the different axes. 
@@ -252,9 +252,9 @@ D12Lwf_ts <- diff(log(wf_ts), lag=12)
 autoplot( D12Lwf_ts, color='red') + 
   labs(x = "Observation Date", y = "Twelvth Difference of Log")
 
-DLwf_ts <- diff(log(wf_ts))
-acf(DLwf_ts, lag.max = 25, main = "ACF for First Diff of log(WF)")
-pacf(DLwf_ts, lag.max = 25, main = "PACF for First Diff of log(WF)")
+Dwf_ts <- diff(log(wf_ts))
+acf(Dwf_ts, lag.max = 25, main = "ACF for First Diff of log(WF)")
+pacf(Dwf_ts, lag.max = 25, main = "PACF for First Diff of log(WF)")
 ```
 
 
@@ -276,7 +276,7 @@ minBIC
 ```
 ###  Look at residuals
 Check ACF and PCF of the best ARIMA model
-``` {r ACF_and_PACF_for_ARIMA00_noint}
+``` {r wf_ACF_and_PACF_for_ARIMA00_noint}
 
 acf(resid(ARIMA00_noint), lag.max = 20, main = "ACF for ARIMA00_noint wf_ts")
 
@@ -286,7 +286,7 @@ pacf( resid(ARIMA00_noint), lag.max = 20, main = "PACF for ARIMA00_noint wf_ts")
 Looking at ACF and PACF, we have structure at 3, 4, 9 and 12, with 12 being the largest, so let's start with lag 12. This would be a seasonal structure. 
 
 ### Structure at lag 12
-```{r arma_lag_12}
+```{r wf_arma_lag_12}
 #seasonal AR(12)
 ARIMA_P0_Q0_S1.1.0<- Arima(wf_ts, order = c(0,1,0), seasonal=list(order=c(1,1,0), period=12), method="ML" ) #  BIC= 3062.311
 
@@ -307,7 +307,7 @@ pacf( resid(ARIMA_P0_Q0_S0.1.1), lag.max = 20, main = "PACF for ARIMA_P12_Q0 wf_
 
 We can see structure at lag 1, 4 and 13, so let's try 1 first
 ### Structure at lag 1
-```{r arma_lag_1}
+```{r wf_arma_lag_1}
 minBIC
 # AR(1),Seasonal MA(12)
 ARIMA_P1_Q0_S0.1.1 <- Arima(wf_ts, order = c(1,1,0), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3021.39
@@ -328,8 +328,8 @@ pacf( resid(ARIMA_P0_Q1_S0.1.1), lag.max = 20, main = "PACF for ARIMA_P0_Q1_S0.1
 ```
 After taking MA(1), we see structure at 3, 4, 9, 13 and 15. Since the greatest structure remains at lag4, so try to fit models there next 
 
-## Structure at 4, so let's try lag4
-```{r arma_lag_4}
+### Structure at 4, so let's try lag4
+```{r wf_arma_lag_4}
 minBIC
 # AR(4) MA(1) + MA(12)
 ARIMA_P4_Q1_S0.1.1 <- Arima(wf_ts, order = c(4,1,1), fixed = c(0,0,0,NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3355.16, not better than best model
@@ -342,8 +342,8 @@ isMinBIC(ARIMA_P0_Q1.4_S0.1.1)
 ARIMA_P0_Q1.4_S0.1.1
 ```
 Even though the individual terms for ar4 in the AR(4) MA(1) expression and the terms for ma4 in the MA(1.4) expressions are statistically signficant, the BIC is not smaller, so we dont have a better fit model. The next biggest structure was at lag 3. 
-## Structure for lag3:
-```{r arma_lag_3}
+### Structure for lag3:
+```{r wf_arma_lag_3}
 minBIC
 # AR(3) MA(1) + MA(12)
 ARIMA_P3_Q1_S0.1.1 <- Arima(wf_ts, order = c(3,1,1), fixed = c(0,0,NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3315.41, not better than best model
@@ -356,9 +356,9 @@ isMinBIC(ARIMA_P0_Q1.3_S0.1.1)
 ARIMA_P0_Q1.3_S0.1.1
 ```
 
-## Structure at lag 9
+### Structure at lag 9
 Next we try structure at lag 9
-```{r arma_lag_9}
+```{r wf_arma_lag_9}
 minBIC
 # AR(9) MA(1) + MA(12)
 ARIMA_P9_Q1_S0.1.1 <- Arima(wf_ts, order = c(9,1,1), fixed = c(rep.int(0,8), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3425.34, not better than best model
@@ -372,9 +372,9 @@ ARIMA_P0_Q1.9_S0.1.1
 ```
 Since no structure is seen at lag 9, next we try lag 13
 
-## Structure at lag 13
+### Structure at lag 13
 Next we try to fit structure at lag 13
-```{r arma_lag_13}
+```{r wf_arma_lag_13}
 minBIC
 # AR(13) MA(1) + SMA(12)
 ARIMA_P13_Q1_S0.1.1 <- Arima(wf_ts, order = c(13,1,1), fixed = c(rep.int(0,12), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3456.46 not better than best model
@@ -387,9 +387,9 @@ isMinBIC(ARIMA_P0_Q1.13_S0.1.1)
 ARIMA_P0_Q1.13_S0.1.1
 ```
 Lag 13 was not a better fit either, so finally, we'll try lag 15
-## Structure at lag 15
+### Structure at lag 15
 Next we try to fit structure at lag 13
-```{r arma_lag_15}
+```{r wf_arma_lag_15}
 minBIC
 # AR(15) MA(1) + SMA(12)
 ARIMA_P15_Q1_S0.1.1 <- Arima(wf_ts, order = c(15,1,1), fixed = c(rep.int(0,14), NA,1, NA), seasonal=list(order=c(0,1,1), period=12), method="ML" )  # BIC=3452.15 not better than best model
@@ -403,55 +403,12 @@ ARIMA_P0_Q1.15_S0.1.1
 ```
 
 ## Report best model for wf:
-Te best model is MA(1) with Seasonal MA(12), BIC=3020.57
+The best model is MA(1) with Seasonal MA(12), BIC=3020.57
 ```{r report_wf_model}
 ARIMA_P0_Q1_S0.1.1
 
 ```
-## Structure at 3
-There's still some structure at 3, although it could be random variability, let's try it to be sure
-```{r arma_lag_3}
-minBIC
-# AR(3,4,12)
-ARIMA_P3.4.12_Q0 <- Arima(wf_ts, order = c(12,1,0), fixed=c(rep.int(0,2), NA, NA, rep.int(0,7), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) # BIC=3048.74 - best BIC so far and AR3 is also statistically significant 
 
-ARIMA_P3.4.12_Q0 
-isMinBIC(ARIMA_P3.4.12_Q0)
-
-ARIMA_P4.12_Q3 <- Arima(wf_ts,order = c(12,1,3), fixed=c(rep.int(0,3), NA, rep.int(0,7), NA, rep(0,2), NA), include.constant = FALSE, method="ML" ) # BIC=3211.42 which is not lower than best so far
-isMinBIC(ARIMA_P4.12_Q3)
-ARIMA_P4.12_Q3
-```
-## Residuals of AR(3,4,12) model 
-```{r resid_wf_AR34.12}
-acf(resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "ACF for ARIMA_P3.4.12_Q0 wf_ts")
-
-pacf( resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "PACF for ARIMA_P3.4.12_Q0 wf_ts")
-```
-
-## Structure at 9
-There's still some structure at 9, let's try it to be sure
-```{r arma_lag_9}
-minBIC
-# AR(3,4,9,12)
-ARIMA_P3.4.9.12_Q0 <- Arima(wf_ts, order = c(12,1,0), fixed=c(0, 0, NA, NA, rep.int(0,4), NA, rep.int(0, 2), NA), seasonal=list(order=c(0,1,0), period=12), include.constant = FALSE , method="ML" ) # BIC=3048.74 - best BIC so far and AR3 is also statistically significant 
-
-ARIMA_P3.4.9.12_Q0 
-isMinBIC(ARIMA_P3.4.9.12_Q0)
-
-ARIMA_P3.4.12_Q9 <- Arima(wf_ts,order = c(12,1,9), fixed=c(rep.int(0,2), NA, NA, rep.int(0,7), NA, rep(0,8), NA), include.constant = FALSE, method="ML" ) # BIC=3211.42 which is not lower than best so far
-isMinBIC(ARIMA_P3.4.12_Q9)
-ARIMA_P3.4.12_Q9
-```
-## Residuals of AR(3,4,12) model 
-```{r resid_wf_AR34.12}
-acf(resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "ACF for ARIMA_P3.4.12_Q0 wf_ts")
-
-pacf( resid(ARIMA_P3.4.12_Q0), lag.max = 20, main = "PACF for ARIMA_P3.4.12_Q0 wf_ts")
-```
-
-
-## Best Model for WF 
 
 
 ## Significant events with Wells Fargo
@@ -464,17 +421,9 @@ There appears to be a general positive trend  until there are a couple large dec
 
 ```{r VAR_model}
 DLrut_ts <- diff(log(rut_ts))
-VAR_DATA <-  ts.union( DLwf_ts, DLrut_ts) 
+Dwf_ts <- diff(wf_ts)
+VAR_DATA <-  ts.union( Dwf_ts, DLrut_ts) 
 
-#VAR_DATA <-  ts.union( DLGDP_ts, LFF_ts, DLGOV_ts) 
-
-VARselect( VAR_DATA, lag.max = 12, type="const" )
-
-```
-
-# Estimate the VAR model
-
-```{r Estimate_VAR_model}
 
 VAR_est <- VAR(VAR_DATA, p=1, type = "const", season=12)
 VAR_est
@@ -490,11 +439,11 @@ forecasts <- forecast(VAR_est, h = 6, level = c(95))
 data_from_excel_wf
 plot(forecasts )
 
-best.forecast <- forecasts$forecast$DLwf_ts$mean
-best.lower <- forecasts$forecast$DLwf_ts$lower
-best.upper <- forecasts$forecast$DLwf_ts$upper
+best.forecast <- forecasts$forecast$Dwf_ts$mean
+best.lower <- forecasts$forecast$Dwf_ts$lower
+best.upper <- forecasts$forecast$Dwf_ts$upper
 
-col_names <- as.yearqtr(time(forecasts$forecast$DLwf_ts$mean)) 
+col_names <- as.yearmon(time(forecasts$forecast$Dwf_ts$mean)) 
 
 df <-  data.frame( as.Date(col_names), best.forecast, best.lower, best.upper)
 
@@ -508,5 +457,5 @@ ggplot(data = df, aes(x = Date, y = as.double(Forecast) )) +
   geom_line(data = df,  aes(x = Date, y = `50% Upper`), color="red" ) +
   geom_line(data=(df_data_wf  %>% filter(date > (as.Date('2010-1-1')))) , mapping=aes(x=date, y=New.Cards.Issued))+
   labs(x = "Date", y = "New Cards Issued")+
-  ggtitle("Optimally Selected Model Forecast")
+  ggtitle("Model Forecast based on VAR model")
 ```
